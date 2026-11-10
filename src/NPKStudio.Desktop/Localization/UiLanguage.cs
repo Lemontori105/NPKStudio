@@ -9,7 +9,8 @@ namespace NPKStudio.Desktop.Localization;
 ///     <para>跟随系统：系统首选语言是中文（<c>zh</c> 开头）用 <c>zh-CN</c>，其余一律 <c>en-US</c>。</para>
 ///     <para>
 ///         项目开了 <c>InvariantGlobalization</c>，<c>CultureInfo.CurrentUICulture</c> 永远是不变区域性，
-///         所以系统语言要直接问系统：macOS 读 <c>AppleLanguages</c>，Windows 调 <c>GetUserDefaultUILanguage</c>，
+///         所以系统语言要直接问系统：macOS 读 <c>AppleLanguages</c>，Windows 调 <c>GetUserDefaultUILanguage</c>
+///         （https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getuserdefaultuilanguage ），
 ///         其余读 <c>LANGUAGE</c> / <c>LC_ALL</c> / <c>LC_MESSAGES</c> / <c>LANG</c>。
 ///     </para>
 /// </summary>

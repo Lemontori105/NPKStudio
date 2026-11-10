@@ -10,7 +10,9 @@ namespace NPKStudio.Desktop.ViewModels;
 ///         <b>运行时切换语言</b>：每个实例创建时登记到 <see cref="LanguageRefresh" />（弱引用）。
 ///         切换语言后先调 <see cref="OnLanguageChanged" />（子类在这里清文案缓存、重算存下来的文字），
 ///         再发一次属性名为空的变更通知——Avalonia 的编译绑定把空属性名当成"全部属性都变了"重新取值
-///         （反编译查 Avalonia.Markup.Xaml 11.3.22 <c>InpcPropertyAccessor.OnEvent</c>：名字相同或 <c>IsNullOrEmpty</c> 都刷新）。
+///         （<c>InpcPropertyAccessor.OnEvent</c>：名字相同或 <c>IsNullOrEmpty</c> 都刷新。用 REA https://github.com/morluto/rea
+///         反编译 Avalonia.Markup.Xaml 11.3.22 确认，官方源码：
+///         https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Markup/Avalonia.Markup.Xaml/MarkupExtensions/CompiledBindings/PropertyInfoAccessorFactory.cs#L121-L127 ）。
 ///     </para>
 /// </summary>
 public abstract class ViewModelBase : INotifyPropertyChanged {

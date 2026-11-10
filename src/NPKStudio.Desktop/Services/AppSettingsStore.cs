@@ -163,7 +163,8 @@ public sealed class AppSettingsStore {
             if (document.RootElement.ValueKind != JsonValueKind.Object) return;
 
             // 先看类型再取值：JsonElement.TryGetInt32 遇到非 Number 会抛 InvalidOperationException
-            // 而不是返回 false，被下面的 catch 吞掉后，后面所有设置都会丢失。
+            // 而不是返回 false（https://learn.microsoft.com/en-us/dotnet/api/system.text.json.jsonelement.trygetint32 ），
+            // 被下面的 catch 吞掉后，后面所有设置都会丢失。
             foreach (var property in document.RootElement.EnumerateObject()) {
                 switch (property.Value.ValueKind) {
                     case JsonValueKind.Number when property.Value.TryGetInt32(out var number):

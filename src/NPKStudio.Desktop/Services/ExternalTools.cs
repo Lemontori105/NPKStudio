@@ -142,7 +142,7 @@ internal static partial class ExternalToolCatalog {
 /// <summary>
 ///     外部工具的检测、查最新版、找下载页、安装（macOS 走 Homebrew）。
 ///     <para>
-///         版本来源用 Homebrew 的官方 API（<c>formulae.brew.sh</c>）：安装也走 Homebrew，
+///         版本来源用 Homebrew 的官方 API（<c>formulae.brew.sh</c>，https://formulae.brew.sh/docs/api/ ）：安装也走 Homebrew，
 ///         所以"最新版本"就是点按钮后实际会装上的版本。联网统一走 <see cref="SystemProxy" />。
 ///     </para>
 /// </summary>

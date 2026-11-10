@@ -8,7 +8,8 @@ namespace NPKStudio.Desktop.Input;
 ///     macOS「智能缩放」：触控板双指轻点两下（Magic Mouse 是单指轻点两下）。
 ///     <para>
 ///         Avalonia 11.3.22 的原生视图类 <c>AvnView</c> 没有实现 <c>smartMagnifyWithEvent:</c>
-///         （反编译查过 libAvaloniaNative.dylib：手势只接了 magnifyWithEvent: / rotateWithEvent: / swipeWithEvent:），
+///         （用 REA（https://github.com/morluto/rea）反编译 libAvaloniaNative.dylib 确认，手势只接了 magnifyWithEvent: /
+///         rotateWithEvent: / swipeWithEvent:；与官方源码一致：https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/native/Avalonia.Native/src/OSX/AvnView.mm#L535-L551），
 ///         系统发来的这个手势沿响应链传下去就没了。这里用 Objective-C runtime 在运行时给 <c>AvnView</c>
 ///         补上这个方法，收到后在 UI 线程上调用登记的处理函数。
 ///     </para>

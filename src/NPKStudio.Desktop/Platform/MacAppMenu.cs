@@ -17,17 +17,28 @@ namespace NPKStudio.Desktop.Platform;
 ///         <see cref="Application" /> 上的 <see cref="NativeMenu" />，那时还没有就放默认的 "About Avalonia"，之后再设不会生效。
 ///         <c>AfterSetup</c> 在 <see cref="Application.Initialize" /> 之后、
 ///         <see cref="Application.OnFrameworkInitializationCompleted" /> 之前执行
-///         （反编译查 Avalonia.Controls 11.3.22 <c>AppBuilder.SetupUnsafe</c> 的调用顺序），所以要在 <c>Initialize</c> 里设。
+///         （<c>AppBuilder.SetupUnsafe</c> 的调用顺序，https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Controls/AppBuilder.cs#L335-L355 ；
+///         建菜单的回调：https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Native/AvaloniaNativePlatformExtensions.cs#L21-L26 ；
+///         没有菜单就放默认菜单：https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Native/AvaloniaNativeMenuExporter.cs#L221-L235 ），
+///         所以要在 <c>Initialize</c> 里设。
 ///     </para>
 ///     <para>
 ///         <b>标准项</b>：Avalonia 默认追加的 Services / Hide / Hide Others / Show All / Quit 是写死的英文
-///         （<c>AvaloniaNativeMenuExporter.PopulateStandardOSXMenuItems</c>），所以 Program 里用
+///         （<c>AvaloniaNativeMenuExporter.PopulateStandardOSXMenuItems</c>，
+///         https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Native/AvaloniaNativeMenuExporter.cs#L145-L202 ），所以 Program 里用
 ///         <c>MacOSPlatformOptions.DisableDefaultApplicationMenuItems</c> 关掉，这里照它的做法重建：
 ///         服务子菜单打上 Avalonia 内部的 <c>MacOSNativeMenuCommands.IsServicesSubmenuProperty</c> 标记
-///         （原生侧据此把它当成系统"服务"菜单）；隐藏 / 隐藏其他 / 全部显示直接给 NSApp 发
-///         <c>hide:</c> / <c>hideOtherApplications:</c> / <c>unhideAllApplications:</c>；
+///         （https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Native/MacOSNativeMenuCommands.cs#L36 ，原生侧据此把它当成系统"服务"菜单：
+///         https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Native/IAvnMenuItem.cs#L180 ）；隐藏 / 隐藏其他 / 全部显示直接给 NSApp 发
+///         <c>hide:</c> / <c>hideOtherApplications:</c> / <c>unhideAllApplications:</c>（Avalonia 自己也是这三个：
+///         https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/native/Avalonia.Native/src/OSX/app.mm#L164-L183 ；AppKit 文档：
+///         https://developer.apple.com/documentation/appkit/nsapplication/hide(_:) ）；
 ///         退出和 Avalonia 一样走 <see cref="IClassicDesktopStyleApplicationLifetime.TryShutdown" />，
 ///         主窗口的未保存确认照常生效。
+///     </para>
+///     <para>
+///         以上 Avalonia 内部行为先用 REA（https://github.com/morluto/rea）反编译 11.3.22 的发行程序集确认，再对照官方源码（链接见上）。
+///         菜单结构参考苹果人机界面指南：https://developer.apple.com/design/human-interface-guidelines/the-menu-bar
 ///     </para>
 /// </summary>
 internal static class MacAppMenu {

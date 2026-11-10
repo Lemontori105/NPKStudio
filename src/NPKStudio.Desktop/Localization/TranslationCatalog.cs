@@ -69,7 +69,8 @@ public sealed class TranslationCatalog : INotifyPropertyChanged {
         CurrentLanguage = language;
         // 索引器绑定的变更通知要用索引器的属性名 "Item"，不是 WPF 习惯的 "Item[]"：
         // Avalonia 11.3 的 {loc:Tr} 走反射绑定 ReflectionIndexerNode，它的 ShouldUpdate 拿通知里的名字
-        // GetDeclaredProperty(name)，是带索引参数的属性才刷新（反编译查 Avalonia.Base 11.3.22）。
+        // GetDeclaredProperty(name)，是带索引参数的属性才刷新（用 REA https://github.com/morluto/rea 反编译 Avalonia.Base 11.3.22 确认，
+        // 官方源码：https://github.com/AvaloniaUI/Avalonia/blob/11.3.22/src/Avalonia.Base/Data/Core/ExpressionNodes/Reflection/ReflectionIndexerNode.cs#L81-L87 ）。
         // 用 "Item[]" 时找不到属性，XAML 里所有 {loc:Tr} 文字切换语言后都不会变。
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerPropertyName));
         return true;

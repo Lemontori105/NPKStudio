@@ -7,7 +7,9 @@ namespace NPKStudio.Desktop.Platform;
 /// <summary>
 ///     macOS 窗口级快捷键：⌘W 关闭当前窗口。
 ///     <para>
-///         原生 Mac 程序的 ⌘W 来自"文件 → 关闭窗口"菜单项（performClose:）；Avalonia 不建这个菜单，
+///         ⌘W 是 macOS 的标准快捷键"关闭最前面的窗口"（https://support.apple.com/102650 ）。
+///         原生 Mac 程序的 ⌘W 来自"文件 → 关闭窗口"菜单项
+///         （performClose:，https://developer.apple.com/documentation/appkit/nswindow/performclose(_:) ）；Avalonia 不建这个菜单，
 ///         程序里也没有处理 ⌘W 的地方，所以按了没反应（不是和别的快捷键冲突）。
 ///         这里给所有 <see cref="Window" /> 挂一个类级处理：没被控件处理掉的 ⌘W 就调用
 ///         <see cref="Window.Close()" />。主窗口照常走关闭流程（有未保存修改会先询问）。
