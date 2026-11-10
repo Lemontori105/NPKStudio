@@ -11,6 +11,7 @@
   <StreamGeometry x:Key="IconPng">M4 16.5 V3.5 H12 L16 7.5 V16.5 Z M12 3.5 V7.5 H16 M7 19 V12 M5.5 17.5 L7 19 L8.5 17.5</StreamGeometry>
   <StreamGeometry x:Key="IconGif">M4 4.5 H16 V15.5 H4 Z M4 8.5 H16 M8 8.5 V15.5 M12 8.5 V15.5</StreamGeometry>
   <StreamGeometry x:Key="IconTheme">M10 6 A4 4 0 1 0 10 14 A4 4 0 1 0 10 6 M10 1.5 V3 M10 17 V18.5 M1.5 10 H3 M17 10 H18.5 M4 4 L5 5 M15 15 L16 16 M16 4 L15 5 M5 15 L4 16</StreamGeometry>
+  <StreamGeometry x:Key="IconSettings">M3.5 6 H16.5 M3.5 10 H16.5 M3.5 14 H16.5 M7 4.5 V7.5 M13 8.5 V11.5 M9 12.5 V15.5</StreamGeometry>
   <StreamGeometry x:Key="IconSearch">M9 3.5 A5.5 5.5 0 1 0 9 14.5 A5.5 5.5 0 1 0 9 3.5 M13 13 L17 17</StreamGeometry>
   <StreamGeometry x:Key="IconPackage">M10 2.5 L17 6 V14 L10 17.5 L3 14 V6 Z M3 6 L10 9.5 L17 6 M10 9.5 V17.5</StreamGeometry>
   <StreamGeometry x:Key="IconManifest">M4.5 3 H13 L16 6 V17 H4.5 Z M13 3 V6 H16 M7 8.5 H13 M7 11.5 H13 M7 14.5 H10</StreamGeometry>
@@ -38,6 +39,9 @@
   <!-- 播放控制图标：实心形状，使用处给 Fill（不是 Stroke） -->
   <StreamGeometry x:Key="IconPlay">M6.5 4.5 L15.5 10 L6.5 15.5 Z</StreamGeometry>
   <StreamGeometry x:Key="IconPause">M6 4.5 H9 V15.5 H6 Z M11 4.5 H14 V15.5 H11 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconStop">M5.5 5.5 H14.5 V14.5 H5.5 Z</StreamGeometry>
+  <StreamGeometry x:Key="IconSound">M3.5 8 H6.5 L10.5 4.5 V15.5 L6.5 12 H3.5 Z M13 7.5 A3.5 3.5 0 0 1 13 12.5 M15 5.5 A6.5 6.5 0 0 1 15 14.5</StreamGeometry>
+  <StreamGeometry x:Key="IconExport">M10 3.5 V12 M6.5 8.5 L10 12 L13.5 8.5 M4 13.5 V16.5 H16 V13.5</StreamGeometry>
   <StreamGeometry x:Key="IconPrev">M15 4.5 L7.5 10 L15 15.5 Z</StreamGeometry>
   <StreamGeometry x:Key="IconNext">M5 4.5 L12.5 10 L5 15.5 Z</StreamGeometry>
   <StreamGeometry x:Key="IconFirst">M4.5 4.5 H6.5 V15.5 H4.5 Z M16 4.5 L7.5 10 L16 15.5 Z</StreamGeometry>

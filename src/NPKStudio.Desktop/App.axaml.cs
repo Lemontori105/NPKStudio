@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
@@ -9,7 +10,22 @@ using NPKStudio.Desktop.Views;
 namespace NPKStudio.Desktop;
 
 public sealed partial class App : Application {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize() {
+        AvaloniaXamlLoader.Load(this);
+
+        // macOS 应用菜单必须在这里设：Avalonia.Native 紧接着（AfterSetup）就读它，
+        // 到 OnFrameworkInitializationCompleted 再设已经晚了，菜单里会是默认的 "About Avalonia"。
+        // 主窗口这时还没建，点菜单时再去取。
+        if (OperatingSystem.IsMacOS()) {
+            NativeMenu.SetMenu(this, Platform.MacAppMenu.Build(
+                openAbout: () => CurrentMainWindow()?.OpenAbout(),
+                openSettings: () => CurrentMainWindow()?.OpenSettings()));
+            Platform.MacWindowShortcuts.Install();
+        }
+    }
+
+    private MainWindow? CurrentMainWindow() =>
+        (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as MainWindow;
 
     public override void OnFrameworkInitializationCompleted() {
         // 全局兜底：任何没被局部 catch 的异常至少留下痕迹，而不是"窗口突然消失、什么都没有"。
@@ -193,10 +209,12 @@ public sealed partial class App : Application {
                 background = backdropValue.ToString();
             }
 
-            // 语言必须在窗口构造前设定，XAML 绑定才会取到对应词表
-            if (!string.IsNullOrEmpty(language)) {
-                Localization.TranslationCatalog.Instance.SetLanguage(language);
-            }
+            // 语言必须在窗口构造前设定，XAML 绑定才会取到对应词表。
+            // 优先级：--lang > 设置窗口里保存的语言 > 跟随系统（中文系统用中文，其余用英文）
+            var savedLanguage = Services.AppSettingsStore.Load().Language;
+            var savedOrSystem = savedLanguage is null ? Localization.UiLanguage.DetectSystemTag() : null;
+            Localization.TranslationCatalog.Instance.SetLanguage(
+                Localization.UiLanguage.Resolve(language, savedLanguage, savedOrSystem));
 
             // 主题也必须在窗口构造前定：截图要固定浅色 / 深色两套，不受系统设置影响
             if (!string.IsNullOrEmpty(theme)) {

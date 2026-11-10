@@ -97,6 +97,9 @@ internal sealed class ChannelPlayback : ViewModelBase
     /// <summary>语言切换后清掉倍率文案缓存。</summary>
     public void InvalidateRateOptions() => _rateOptions = null;
 
+    /// <inheritdoc />
+    protected override void OnLanguageChanged() => InvalidateRateOptions();
+
     /// <summary>播放 / 暂停。</summary>
     public void TogglePlay() {
         if (IsPlaying) {

@@ -9,6 +9,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 
 using NPKStudio.Desktop.Controls;
+using NPKStudio.Desktop.Input;
 using NPKStudio.Desktop.Localization;
 using NPKStudio.Desktop.ViewModels;
 using NPKStudio.Desktop.Views;
@@ -124,7 +125,7 @@ public sealed class GuideMenuUiTests
         window.Close();
     }
 
-    /// <summary>Ctrl+Shift+H / Ctrl+Shift+V 各加一条（与右键菜单同一入口）。</summary>
+    /// <summary>⇧⌘H / ⇧⌘V（Windows 为 Ctrl+Shift+H / V）各加一条（与右键菜单同一入口）。</summary>
     [AvaloniaFact]
     public void AddGuideShortcuts_AddOneGuideEach() {
         var window = new MainWindow();
@@ -133,11 +134,11 @@ public sealed class GuideMenuUiTests
         var vm = (MainWindowViewModel)window.DataContext!;
         var canvas = Canvas(window);
 
-        Press(window, Key.H, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.H, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Single(canvas.HorizontalGuides);
         Assert.Equal(1, vm.GuideCount);
 
-        Press(window, Key.V, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.V, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Single(canvas.VerticalGuides);
         Assert.Equal(2, vm.GuideCount);
 

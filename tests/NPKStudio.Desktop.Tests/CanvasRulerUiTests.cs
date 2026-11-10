@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 
 using NPKStudio.Desktop.Controls;
+using NPKStudio.Desktop.Input;
 using NPKStudio.Desktop.Localization;
 using NPKStudio.Desktop.ViewModels;
 using NPKStudio.Desktop.Views;
@@ -37,7 +38,7 @@ public sealed class CanvasRulerUiTests
         return canvas!;
     }
 
-    /// <summary>Ctrl+R 切换标尺显示；VM 与控件两边必须同步（右键菜单绑定的是同一属性）。</summary>
+    /// <summary>⌘R（Windows 为 Ctrl+R）切换标尺显示；VM 与控件两边必须同步（右键菜单绑定的是同一属性）。</summary>
     [AvaloniaFact]
     public void CtrlR_TogglesRulers_OnViewModelAndCanvas() {
         var window = new MainWindow();
@@ -63,7 +64,7 @@ public sealed class CanvasRulerUiTests
         Assert.True(toggles[2].IsChecked);
         Assert.True(toggles[3].IsChecked);
 
-        Press(window, Key.R, KeyModifiers.Control);
+        Press(window, Key.R, PlatformShortcuts.Command);
         Assert.False(vm.IsRulersVisible);
         Assert.False(canvas.IsRulersVisible);
         Assert.False(toggles[0].IsChecked);
@@ -78,14 +79,14 @@ public sealed class CanvasRulerUiTests
         Assert.False(vm.IsGuideLabelsVisible);
         Assert.False(canvas.ShowGuideLabels);
 
-        Press(window, Key.R, KeyModifiers.Control);
+        Press(window, Key.R, PlatformShortcuts.Command);
         Assert.True(vm.IsRulersVisible);
         Assert.True(canvas.IsRulersVisible);
 
         window.Close();
     }
 
-    /// <summary>Ctrl+; 切换参考线显示，隐藏后数据仍保留。</summary>
+    /// <summary>⌘;（Windows 为 Ctrl+;）切换参考线显示，隐藏后数据仍保留。</summary>
     [AvaloniaFact]
     public void CtrlSemicolon_TogglesGuides_AndKeepsData() {
         var window = new MainWindow();
@@ -98,12 +99,12 @@ public sealed class CanvasRulerUiTests
         Assert.Equal(1, canvas.GuideCount);
         Assert.True(canvas.IsGuidesVisible);
 
-        Press(window, Key.OemSemicolon, KeyModifiers.Control);
+        Press(window, Key.OemSemicolon, PlatformShortcuts.Command);
         Assert.False(vm.IsGuidesVisible);
         Assert.False(canvas.IsGuidesVisible);
         Assert.Equal(1, canvas.GuideCount);
 
-        Press(window, Key.OemSemicolon, KeyModifiers.Control);
+        Press(window, Key.OemSemicolon, PlatformShortcuts.Command);
         Assert.True(vm.IsGuidesVisible);
         Assert.True(canvas.IsGuidesVisible);
         Assert.Equal(1, canvas.GuideCount);

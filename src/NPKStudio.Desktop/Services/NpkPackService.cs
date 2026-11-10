@@ -1,4 +1,5 @@
 using NPKStudio.Core.Formats.Npk;
+using NPKStudio.Desktop.Localization;
 
 namespace NPKStudio.Desktop.Services;
 
@@ -39,6 +40,8 @@ public sealed record PackOutcome(
 ///     </para>
 /// </summary>
 public static class NpkPackService {
+    private static TranslationCatalog Loc => TranslationCatalog.Instance;
+
     /// <summary>打包根目录下的所有子文件夹。</summary>
     /// <param name="rootDirectory">根目录（其每个子目录各打一个包）。</param>
     /// <param name="manifest">资源清单；<c>null</c> 表示全部走推断。</param>
@@ -107,7 +110,7 @@ public static class NpkPackService {
         }
 
         if (groups.Count == 0) {
-            return new PackOutcome(folderName, "-", 0, 0, "文件夹内没有 .img");
+            return new PackOutcome(folderName, "-", 0, 0, Loc["pack.noImg"]);
         }
 
         var primary = groups.OrderByDescending(kv => kv.Value.Count).First();
@@ -135,7 +138,7 @@ public static class NpkPackService {
 
         // 提示只走 Note，不进 Error —— 否则会被当成"导出失败"（Success 只看 Error）。
         var note = inferred.Count > 0
-            ? $"{inferred.Count} 个文件未命中清单，已按输出名推断路径：{string.Join(", ", inferred.Take(3))}"
+            ? Loc.F("pack.inferred", inferred.Count, string.Join(", ", inferred.Take(3)))
             : null;
         return new PackOutcome(
             folderName, primary.Key, finalCount, totalBytes, null, replaced, added, note,

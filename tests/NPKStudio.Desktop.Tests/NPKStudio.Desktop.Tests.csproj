@@ -21,6 +21,7 @@
   <ItemGroup>
     <!-- 样本定位工具：与 Core.Tests 共享同一份源码（链接编译） -->
     <Compile Include="..\SampleFiles.cs" Link="SampleFiles.cs" />
+    <Compile Include="..\OggTestData.cs" Link="OggTestData.cs" />
     <!-- 样本（含合成样本 synthetic_shapes.NPK）拷到 <out>/samples/；
          真实样本自备，缺失时相关用例静默跳过。 -->
     <None Include="..\samples\*.NPK" Link="samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

@@ -2,6 +2,7 @@ using System.Text;
 
 using NPKStudio.Core.Diagnostics;
 using NPKStudio.Core.Formats.Npk;
+using NPKStudio.Desktop.Localization;
 
 namespace NPKStudio.Desktop.Services;
 
@@ -22,6 +23,8 @@ internal sealed record ManifestScanResult(int NpkCount, int PathCount, int Faile
 ///     </para>
 /// </summary>
 internal static class ResourceManifestWriter {
+    private static TranslationCatalog Loc => TranslationCatalog.Instance;
+
     /// <summary>清单行前缀，与 <see cref="ResourceManifest.Load" /> 的解析口径一致。</summary>
     private const string LinePrefix = "IMG: ";
 
@@ -42,7 +45,7 @@ internal static class ResourceManifestWriter {
 
         var full = Path.GetFullPath(npkDirectory);
         if (!Directory.Exists(full)) {
-            throw new DirectoryNotFoundException($"目录不存在：{npkDirectory}");
+            throw new DirectoryNotFoundException(Loc.F("error.dirNotFound", npkDirectory));
         }
 
         var outputFull = Path.GetFullPath(outputPath);

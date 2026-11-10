@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Threading;
 
 using NPKStudio.Desktop.Controls;
+using NPKStudio.Desktop.Input;
 using NPKStudio.Desktop.ViewModels;
 using NPKStudio.Desktop.Views;
 
@@ -227,7 +228,7 @@ public sealed class MainWindowLayoutUiTests
         window.Close();
     }
 
-    /// <summary>Ctrl+Shift+1 / Ctrl+Shift+2 折叠对应面板（普通按键不触发）。</summary>
+    /// <summary>⇧⌘1 / ⇧⌘2（Windows 为 Ctrl+Shift+1 / 2）折叠对应面板（普通按键不触发）。</summary>
     [AvaloniaFact]
     public void CollapseShortcuts_TogglePanels()
     {
@@ -238,16 +239,16 @@ public sealed class MainWindowLayoutUiTests
         var left = grid.ColumnDefinitions[0];
         var right = grid.ColumnDefinitions[4];
 
-        Press(window, Key.D1, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.D1, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Equal(40, left.Width.Value);
 
-        Press(window, Key.D2, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.D2, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Equal(40, right.Width.Value);
 
-        Press(window, Key.D1, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.D1, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Equal(280, left.Width.Value);
 
-        Press(window, Key.D2, KeyModifiers.Control | KeyModifiers.Shift);
+        Press(window, Key.D2, PlatformShortcuts.Command | KeyModifiers.Shift);
         Assert.Equal(320, right.Width.Value);
 
         window.Close();

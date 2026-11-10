@@ -1,3 +1,4 @@
+using NPKStudio.Core.Audio;
 using NPKStudio.Core.Formats;
 using NPKStudio.Desktop.Localization;
 using NPKStudio.Desktop.Services;
@@ -70,6 +71,10 @@ internal sealed class ChannelStatusText
         if (error is { } message) return Loc.F("status.frameParseFailed", message);
 
         if (image is { } img && VersionSupport.Of(img.Version) == VersionSupportLevel.Passthrough) {
+            if (img.Version == ImgVersion.Other && OggAudioInfo.IsOgg(img.RawContent.Span)) {
+                return Loc["panel.audioEntry"];   // 音效条目：中间的音频面板可以试听 / 导出 / 替换
+            }
+
             return img.Version == ImgVersion.Other
                 ? Loc["panel.unsupportedOther"]
                 : Loc.F("panel.unsupportedVersion", (int)img.Version);

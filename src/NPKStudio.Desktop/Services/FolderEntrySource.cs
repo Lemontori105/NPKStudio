@@ -1,6 +1,7 @@
 using NPKStudio.Core.Diagnostics;
 using NPKStudio.Core.Exceptions;
 using NPKStudio.Core.Formats;
+using NPKStudio.Desktop.Localization;
 using NPKStudio.Desktop.ViewModels;
 
 namespace NPKStudio.Desktop.Services;
@@ -19,6 +20,8 @@ namespace NPKStudio.Desktop.Services;
 ///     </para>
 /// </summary>
 public sealed class FolderEntrySource {
+    private static TranslationCatalog Loc => TranslationCatalog.Instance;
+
     private readonly List<EntryItem> _entries = [];
 
     private FolderEntrySource(string rootPath) {
@@ -57,7 +60,7 @@ public sealed class FolderEntrySource {
 
         var full = Path.GetFullPath(rootPath);
         if (!Directory.Exists(full)) {
-            throw new DirectoryNotFoundException($"目录不存在：{rootPath}");
+            throw new DirectoryNotFoundException(Loc.F("error.dirNotFound", rootPath));
         }
 
         var source = new FolderEntrySource(full);
@@ -83,7 +86,7 @@ public sealed class FolderEntrySource {
 
         var full = Path.GetFullPath(imgPath);
         if (!File.Exists(full)) {
-            throw new FileNotFoundException($"文件不存在：{imgPath}", full);
+            throw new FileNotFoundException(Loc.F("error.fileNotFound", imgPath), full);
         }
 
         var directory = Path.GetDirectoryName(full);
@@ -145,7 +148,7 @@ public sealed class FolderEntrySource {
             try {
                 File.Move(temp, path, overwrite: true);
             } catch (UnauthorizedAccessException ex) {
-                throw new IOException($"文件被占用，无法写回：{path}。请关闭正在使用该文件的程序后重试。", ex);
+                throw new IOException(Loc.F("error.fileLocked", path), ex);
             }
         } catch {
             TryDelete(temp);
@@ -197,12 +200,12 @@ public sealed class FolderEntrySource {
 
         if (reparsed.Version != image.Version) {
             throw new ImgFormatException(
-                $"IMG 写回自检失败：版本期望 {image.Version}，实际 {reparsed.Version}（{item.Path}）。");
+                Loc.F("error.writeBackVersion", image.Version, reparsed.Version, item.Path));
         }
 
         if (reparsed.Frames.Count != image.Frames.Count) {
             throw new ImgFormatException(
-                $"IMG 写回自检失败：帧数期望 {image.Frames.Count}，实际 {reparsed.Frames.Count}（{item.Path}）。");
+                Loc.F("error.writeBackFrames", image.Frames.Count, reparsed.Frames.Count, item.Path));
         }
     }
 

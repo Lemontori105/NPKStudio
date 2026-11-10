@@ -4,6 +4,7 @@ using System.ComponentModel;
 
 using Avalonia;
 
+using NPKStudio.Core.Audio;
 using NPKStudio.Core.Formats;
 using NPKStudio.Core.Formats.Npk;
 using NPKStudio.Core.Imaging;
@@ -353,6 +354,15 @@ internal sealed class FrameChannel : ViewModelBase
         _playback.InvalidateRateOptions();
     }
 
+    /// <summary>
+    ///     语言切换：清缓存；状态栏里是上一种语言拼好的一句话（"已打开…"之类的一次性提示），
+    ///     没法按新语言重拼，直接换成新语言的"就绪"。
+    /// </summary>
+    protected override void OnLanguageChanged() {
+        InvalidateLocalizedOptions();
+        Status = Loc["status.ready"];
+    }
+
     /// <summary>立即把按 IMG 记忆的设置写盘（关窗口时调用，避免防抖定时器还没触发就退出）。</summary>
     public void Flush() {
         _entryFilter.StopDebounce();
@@ -549,8 +559,134 @@ internal sealed class FrameChannel : ViewModelBase
     /// <summary>打开一个"NPK 源目录"。</summary>
     public Task OpenFolderAsync(string path) => Document.OpenFolderAsync(path);
 
-    /// <summary>是否有未保存的修改。</summary>
-    public bool IsDirty => Editor.IsDirty;
+    /// <summary>
+    ///     是否有未保存的修改：帧编辑（随条目切换重置）或音效替换（不随条目切换重置，保存 / 重新打开才清掉）。
+    /// </summary>
+    public bool IsDirty => Editor.IsDirty || HasUnsavedAudio;
+
+    // ── 音效条目（NPK 里的 .ogg） ─────────────────────────────────────────────
+
+    private bool _hasUnsavedAudio;
+
+    /// <summary>当前条目是不是音效（非 IMG，内容以 Ogg 页头开头）。</summary>
+    public bool IsAudioEntry => _session.CurrentImg is { Version: ImgVersion.Other } img
+                                && OggAudioInfo.IsOgg(img.RawContent.Span);
+
+    /// <summary>当前音效条目的原始字节（不是音效时为空）。</summary>
+    internal ReadOnlyMemory<byte> CurrentAudio => IsAudioEntry ? _session.CurrentImg!.RawContent : ReadOnlyMemory<byte>.Empty;
+
+    /// <summary>当前音效条目的头部信息（不是音效时为 <c>null</c>）。</summary>
+    internal OggAudioInfo? CurrentAudioInfo => IsAudioEntry ? OggAudioInfo.TryParse(CurrentAudio.Span) : null;
+
+    /// <summary>只有 NPK 模式能替换音效（文件夹模式没有音效条目的写回路径）。</summary>
+    public bool CanReplaceAudio => IsAudioEntry && _session.Archive is not null;
+
+    /// <summary>音效面板上的说明：编码 / 采样率 / 声道 / 时长 / 大小，替换过但没保存时加注。</summary>
+    public string AudioInfoText {
+        get {
+            if (!IsAudioEntry) return string.Empty;
+
+            var size = CurrentAudio.Length;
+            var info = CurrentAudioInfo;
+            var text = info is null || info.Codec == OggCodec.Unknown
+                ? Loc.F("audio.infoUnknown", FormatSize(size))
+                : Loc.F("audio.info", info.Codec, info.SampleRate, info.Channels,
+                    info.Duration is { } d ? d.TotalSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) : "?",
+                    FormatSize(size));
+            return HasUnsavedAudio && SelectedEntry?.Npk?.IsModified == true ? text + Loc["audio.modifiedSuffix"] : text;
+        }
+    }
+
+    /// <summary>有替换过、还没保存的音效（跨条目累计）。</summary>
+    public bool HasUnsavedAudio {
+        get => _hasUnsavedAudio;
+        private set {
+            if (!SetProperty(ref _hasUnsavedAudio, value)) return;
+            OnPropertyChanged(nameof(IsDirty));
+        }
+    }
+
+    /// <summary>用新的 Ogg 字节替换当前音效条目（保存时写入）。</summary>
+    internal void ReplaceCurrentAudio(byte[] ogg) {
+        if (!CanReplaceAudio || _session.CurrentImg is not { } img) {
+            throw new InvalidOperationException(Loc["audio.notReplaceable"]);
+        }
+
+        img.ReplaceRawContent(ogg);
+        HasUnsavedAudio = true;
+        NotifyAudio();
+    }
+
+    /// <summary>保存成功或重新打开文件后清掉"有未保存的音效替换"。</summary>
+    internal void MarkAudioSaved() => HasUnsavedAudio = false;
+
+    /// <summary>重发音效相关属性（换条目、替换、保存后）。</summary>
+    internal void NotifyAudio() {
+        OnPropertyChanged(nameof(IsAudioEntry));
+        OnPropertyChanged(nameof(CanReplaceAudio));
+        OnPropertyChanged(nameof(AudioInfoText));
+    }
+
+    /// <summary>
+    ///     导出音效到文件夹（按包内路径建子目录，原样写出字节）。
+    ///     <paramref name="currentOnly" /> 为真只导当前条目，否则导出包里所有以 Ogg 页头开头的条目。
+    ///     替换过还没保存的条目导出的是替换后的内容。
+    /// </summary>
+    /// <returns>导出的文件数。</returns>
+    internal Task<int> ExportAudioAsync(string folder, bool currentOnly) {
+        var archive = _session.Archive;
+        if (archive is null) return Task.FromResult(0);
+
+        var current = SelectedEntry?.Npk;
+        var currentBytes = CurrentAudio.ToArray();
+
+        // 替换过的条目在 IMG 缓存里（永不淘汰）：缓存不是线程安全的，所以先在当前线程取好；
+        // 后台线程只走 ReadRaw（RandomAccess 按偏移读，可并发）。
+        var modified = new Dictionary<NpkEntry, byte[]>(ReferenceEqualityComparer.Instance);
+        if (!currentOnly) {
+            foreach (var entry in archive.Entries) {
+                if (entry.IsModified) {
+                    modified[entry] = archive.LoadImg(entry).RawContent.ToArray();
+                }
+            }
+        }
+
+        return Task.Run(() => {
+            var count = 0;
+            foreach (var entry in archive.Entries) {
+                if (currentOnly && !ReferenceEquals(entry, current)) continue;
+
+                var bytes = currentOnly
+                    ? currentBytes
+                    : modified.TryGetValue(entry, out var replaced) ? replaced : archive.ReadRaw(entry);
+
+                if (!OggAudioInfo.IsOgg(bytes)) continue;
+
+                var target = AudioExportPath(folder, entry.Path);
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.WriteAllBytes(target, bytes);
+                count++;
+            }
+
+            return count;
+        });
+    }
+
+    /// <summary>包内路径 → 导出路径：统一分隔符，拒绝跳出目标文件夹的路径。</summary>
+    internal static string AudioExportPath(string folder, string entryPath) {
+        var relative = entryPath.Replace('\\', '/').TrimStart('/');
+        var full = Path.GetFullPath(Path.Combine(folder, relative.Replace('/', Path.DirectorySeparatorChar)));
+        var root = Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!full.StartsWith(root, StringComparison.Ordinal)) {
+            throw new InvalidOperationException(Loc.F("audio.unsafePath", entryPath));
+        }
+
+        return full;
+    }
+
+    private static string FormatSize(long bytes) => bytes >= 1024 * 1024
+        ? (bytes / 1024d / 1024d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB"
+        : (bytes / 1024d).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " KB";
 
     /// <summary>是否可撤销。</summary>
     public bool CanUndo => Editor.CanUndo;

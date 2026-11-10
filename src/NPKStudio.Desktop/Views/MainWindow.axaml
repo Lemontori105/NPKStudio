@@ -94,6 +94,11 @@
         </StackPanel>
 
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <!-- 设置：macOS 的入口在应用菜单「设置… ⌘,」，这里只在 Windows / Linux 显示 -->
+          <Button Classes="tool" ToolTip.Tip="{loc:Tr tip.settings}" Click="OnOpenSettings"
+                  IsVisible="{Binding ShowSettingsButton}">
+            <Path Data="{StaticResource IconSettings}" Width="20" Height="20" Stretch="Uniform" />
+          </Button>
           <Button Classes="tool" ToolTip.Tip="{loc:Tr tip.theme}" Click="OnToggleTheme">
             <Path Data="{StaticResource IconTheme}" Width="20" Height="20" Stretch="Uniform" />
           </Button>
@@ -284,6 +289,63 @@
             <TextBlock Classes="emptyTitle" Text="{loc:Tr canvas.title}" />
             <TextBlock Classes="emptyDesc" Text="{loc:Tr canvas.desc}" />
           </StackPanel>
+
+          <!-- 音效条目（NPK 里的 .ogg）：试听 / 导出 / 替换。不透明底色盖住画布与空状态 -->
+          <Border x:Name="AudioPanel" IsVisible="{Binding IsAudioEntry}" Background="{DynamicResource BgCanvas}">
+            <Border HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="380" MaxWidth="560"
+                    Background="{DynamicResource SurfaceRaised}" BorderBrush="{DynamicResource BorderDefault}"
+                    BorderThickness="1" CornerRadius="8" Padding="24,20">
+              <StackPanel Spacing="14">
+                <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center">
+                  <Path Data="{StaticResource IconSound}" Width="26" Height="26" Stretch="Uniform"
+                        Stroke="{DynamicResource AccentPrimary}" StrokeThickness="1.4" VerticalAlignment="Center" />
+                  <TextBlock x:Name="AudioTitle" Text="{Binding SelectedEntry.Name}" FontSize="15" FontWeight="SemiBold"
+                             Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" MaxWidth="440" />
+                </StackPanel>
+                <TextBlock x:Name="AudioInfo" Text="{Binding AudioInfoText}" FontSize="12"
+                           Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"
+                           TextAlignment="Center" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                  <Button x:Name="AudioPlayButton" Classes="toolWide" ToolTip.Tip="{loc:Tr audio.tipPlay}" Click="OnToggleAudio">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Data="{StaticResource IconPlay}" Width="14" Height="14" Stretch="Uniform"
+                            Fill="{DynamicResource AccentPrimary}" VerticalAlignment="Center" IsVisible="{Binding !IsAudioPlaying}" />
+                      <Path Data="{StaticResource IconStop}" Width="14" Height="14" Stretch="Uniform"
+                            Fill="{DynamicResource AccentPrimary}" VerticalAlignment="Center" IsVisible="{Binding IsAudioPlaying}" />
+                      <TextBlock Text="{loc:Tr audio.play}" FontSize="12" VerticalAlignment="Center" IsVisible="{Binding !IsAudioPlaying}" />
+                      <TextBlock Text="{loc:Tr audio.stop}" FontSize="12" VerticalAlignment="Center" IsVisible="{Binding IsAudioPlaying}" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="toolWide" ToolTip.Tip="{loc:Tr audio.tipExport}" Click="OnExportAudio">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Data="{StaticResource IconExport}" Width="14" Height="14" Stretch="Uniform"
+                            Stroke="{DynamicResource TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center" />
+                      <TextBlock Text="{loc:Tr audio.export}" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="toolWide" ToolTip.Tip="{loc:Tr audio.tipExportAll}" Click="OnExportAllAudio"
+                          IsEnabled="{Binding HasArchive}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Data="{StaticResource IconPackage}" Width="14" Height="14" Stretch="Uniform"
+                            Stroke="{DynamicResource TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center" />
+                      <TextBlock Text="{loc:Tr audio.exportAll}" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                  <Button Classes="toolWide" ToolTip.Tip="{loc:Tr audio.tipReplace}" Click="OnReplaceAudio"
+                          IsEnabled="{Binding CanReplaceAudio}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <Path Data="{StaticResource IconReplace}" Width="14" Height="14" Stretch="Uniform"
+                            Stroke="{DynamicResource TextSecondary}" StrokeThickness="1.4" VerticalAlignment="Center" />
+                      <TextBlock Text="{loc:Tr audio.replace}" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+                <TextBlock Text="{loc:Tr audio.hint}" FontSize="11" Foreground="{DynamicResource TextSecondary}"
+                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+          </Border>
 
           <!-- 缩放气泡（右下角） -->
           <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
@@ -732,7 +794,7 @@
                    Classes="caption" Text="{Binding SelectionGeometryText}" Margin="16,0"
                    IsVisible="{Binding SelectionGeometryText, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" />
         <TextBlock Grid.Column="4" Classes="caption" Text="{Binding ModeText}" Margin="16,0" />
-        <!-- 画布缩放：来源是 ImageCanvas.Zoom，Ctrl+滚轮 / 适配窗口 / 1:1 都会刷新 -->
+        <!-- 画布缩放：来源是 ImageCanvas.Zoom，⌘+滚轮（Windows 为 Ctrl+滚轮）/ 适配窗口 / 1:1 都会刷新 -->
         <TextBlock Grid.Column="5" Classes="caption" Text="{Binding ZoomText}" Margin="16,0,0,0" />
         <!-- 鼠标所在角色坐标：带「光标」前缀 + 前置竖分隔，避免与左侧选中帧的 X/Y 混淆 -->
         <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center"

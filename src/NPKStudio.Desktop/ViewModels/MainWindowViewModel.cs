@@ -48,8 +48,13 @@ public sealed class MainWindowViewModel : ViewModelBase {
         nameof(SelectedEffectName), nameof(UseLinearDodge), nameof(RateIndex), nameof(IsPlaying),
         nameof(HiddenFrameCount), nameof(HasHiddenFrames), nameof(IsSelectedFrameHidden),
         nameof(CurrentImageKey), nameof(LastOpenSucceeded), nameof(EntryCountText), nameof(SelectedEntry),
-        nameof(PendingFrameLoad)
+        nameof(PendingFrameLoad), nameof(IsAudioEntry), nameof(CanReplaceAudio), nameof(AudioInfoText),
+        nameof(HasUnsavedAudio)
     ];
+
+    // 音效试听：全窗口同一时间只播一段（ffplay 子进程），不属于任何通道
+    private readonly AudioTools _audio = new();
+    private bool _isAudioPlaying;
 
     // 全局设置（`播放倍率` 与 `按 IMG 记忆的效果` 的落盘）、资源清单路径、文件工作区
     private readonly AppSettingsStore _settingsStore = AppSettingsStore.Load();
@@ -82,6 +87,8 @@ public sealed class MainWindowViewModel : ViewModelBase {
         Channels = new ChannelCollection(_settingsStore, _workspace, _paths);
         Channels.ActiveChannelChanged += (_, _) => OnActiveChannelChanged();
         Subscribe(Channels.ActiveChannel);
+        // ffplay 播完 / 被停：进程事件在线程池上，切回 UI 线程再改绑定属性
+        _audio.PlaybackEnded += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => IsAudioPlaying = _audio.IsPlaying);
     }
 
     /// <summary>窗口持有的通道集合（当前只开一个，集合本身支持 N 个）。</summary>
@@ -191,8 +198,126 @@ public sealed class MainWindowViewModel : ViewModelBase {
     /// <summary>是否正在加载。</summary>
     public bool IsBusy => ActiveChannel.IsBusy;
 
-    /// <summary>是否有未保存的修改（标题栏的 <c>●</c> 与关窗确认都用它）。</summary>
-    public bool IsDirty => ActiveChannel.Editor.IsDirty;
+    /// <summary>是否有未保存的修改（标题栏的 <c>●</c> 与关窗确认都用它）：帧编辑或音效替换。</summary>
+    public bool IsDirty => ActiveChannel.IsDirty;
+
+    // ── 音效条目 ───────────────────────────────────────────────────────────────
+
+    /// <summary>当前条目是不是音效（.ogg）：是的话画布中间显示音频面板。</summary>
+    public bool IsAudioEntry => ActiveChannel.IsAudioEntry;
+
+    /// <summary>能否替换当前音效（NPK 模式）。</summary>
+    public bool CanReplaceAudio => ActiveChannel.CanReplaceAudio;
+
+    /// <summary>音频面板上的信息行。</summary>
+    public string AudioInfoText => ActiveChannel.AudioInfoText;
+
+    /// <summary>是否有替换过、还没保存的音效。</summary>
+    public bool HasUnsavedAudio => ActiveChannel.HasUnsavedAudio;
+
+    /// <summary>是否正在试听。</summary>
+    public bool IsAudioPlaying {
+        get => _isAudioPlaying;
+        private set => SetProperty(ref _isAudioPlaying, value);
+    }
+
+    /// <summary>试听当前音效（先停掉正在播的）；失败时把原因写到状态栏。</summary>
+    public bool PlayCurrentAudio() {
+        if (!IsAudioEntry) return false;
+
+        if (!_audio.Play(ActiveChannel.CurrentAudio, out var error, out var missing)) {
+            IsAudioPlaying = false;
+            Status = missing is not null ? MissingToolText(missing) : Loc.F("audio.playFailed", error);
+            return false;
+        }
+
+        IsAudioPlaying = true;
+        Status = Loc.F("audio.playing", SelectedEntry?.Name);
+        return true;
+    }
+
+    /// <summary>停止试听。</summary>
+    public void StopAudio() {
+        _audio.Stop();
+        IsAudioPlaying = false;
+    }
+
+    /// <summary>空格键 / 播放按钮：在播就停，没播就播。</summary>
+    public void ToggleAudio() {
+        if (_audio.IsPlaying) {
+            StopAudio();
+        } else {
+            PlayCurrentAudio();
+        }
+    }
+
+    /// <summary>
+    ///     用一个音频文件替换当前音效：按原音效的采样率 / 声道转成 Ogg Vorbis（已是同参数的 Ogg Vorbis 则原样用），
+    ///     保存时写进 NPK。
+    /// </summary>
+    public async Task ReplaceCurrentAudioAsync(string path) {
+        if (!CanReplaceAudio) return;
+
+        StopAudio();
+        var channel = ActiveChannel;
+        var entry = SelectedEntry;
+        var entryName = entry?.Name;
+        var original = channel.CurrentAudioInfo;
+        channel.IsBusy = true;
+        Status = Loc["audio.converting"];
+        try {
+            var result = await _audio.ToOggVorbisAsync(path, original?.SampleRate ?? 0, original?.Channels ?? 0);
+            if (result.Ogg is null) {
+                Status = result.MissingTool is { } missing ? MissingToolText(missing) : Loc.F("audio.convertFailed", result.Error);
+                return;
+            }
+
+            // 转换期间用户可能切走了条目：只替换发起时的那一条
+            if (!ReferenceEquals(channel, ActiveChannel) || !ReferenceEquals(SelectedEntry, entry) || !channel.CanReplaceAudio) {
+                Status = Loc["audio.replaceCancelled"];
+                return;
+            }
+
+            channel.ReplaceCurrentAudio(result.Ogg);
+            Status = Loc.F(result.Reencoded ? "audio.replacedReencoded" : "audio.replacedAsIs", entryName);
+        } catch (Exception ex) {
+            Status = Loc.F("audio.convertFailed", ex.Message);
+        } finally {
+            channel.IsBusy = false;
+        }
+    }
+
+    /// <summary>导出当前音效，或包里全部音效（按包内路径建子目录）。</summary>
+    public async Task ExportAudioAsync(string folder, bool currentOnly) {
+        var channel = ActiveChannel;
+        channel.IsBusy = true;
+        Status = Loc["audio.exporting"];
+        try {
+            var count = await channel.ExportAudioAsync(folder, currentOnly);
+            Status = Loc.F("audio.exported", count, folder);
+        } catch (Exception ex) {
+            Status = Loc.F("audio.exportFailed", ex.Message);
+        } finally {
+            channel.IsBusy = false;
+        }
+    }
+
+    /// <summary>把当前音效原样写到一个文件（替换过还没保存的就是替换后的内容）。</summary>
+    public async Task ExportCurrentAudioToFileAsync(string path) {
+        var bytes = ActiveChannel.CurrentAudio.ToArray();
+        if (bytes.Length == 0) return;
+
+        try {
+            await File.WriteAllBytesAsync(path, bytes);
+            Status = Loc.F("audio.exportedOne", path);
+        } catch (Exception ex) {
+            Status = Loc.F("audio.exportFailed", ex.Message);
+        }
+    }
+
+    /// <summary>缺工具时的提示：ffplay / ffmpeg 来自 Homebrew 的 ffmpeg，oggenc 来自 vorbis-tools。</summary>
+    private static string MissingToolText(string tool) =>
+        Loc.F("audio.missingTool", tool, tool == "oggenc" ? "vorbis-tools" : "ffmpeg");
 
     /// <summary>是否可撤销（绑定工具栏按钮）。</summary>
     public bool CanUndo => ActiveChannel.Editor.CanUndo;
@@ -344,7 +469,10 @@ public sealed class MainWindowViewModel : ViewModelBase {
 
     /// <summary>
     ///     语言切换后调用：清掉本地化缓存并通知绑定刷新。
-    ///     <para>当前只有启动期 <c>--lang</c>（VM 构造前），所以不影响现有行为；将来加运行时切换时调这里。</para>
+    ///     <para>
+    ///         设置窗口切换语言时由 <see cref="OnLanguageChanged" /> 调用。先发"选项列表变了"再发"选中项变了"，
+    ///         下拉框换完列表才能按新文字选回原来那一项。
+    ///     </para>
     /// </summary>
     public void RefreshLocalizedOptions() {
         foreach (var channel in Channels.Channels) {
@@ -358,6 +486,28 @@ public sealed class MainWindowViewModel : ViewModelBase {
         OnPropertyChanged(nameof(OriginModeText));
         OnPropertyChanged(nameof(OriginModeTip));
     }
+
+    /// <summary>设置里保存的界面语言（<c>null</c> = 跟随系统）。</summary>
+    public string? SavedLanguage => _settingsStore.Language;
+
+    /// <summary>工具栏上的设置按钮只在非 macOS 显示：macOS 的设置入口在应用菜单「设置… ⌘,」（苹果的习惯）。</summary>
+    public bool ShowSettingsButton => !OperatingSystem.IsMacOS();
+
+    /// <summary>
+    ///     设置窗口里切换语言：保存选择（<c>null</c> = 跟随系统），立刻切换词表。
+    ///     <para>
+    ///         XAML 里 {loc:Tr} 的绑定自己会刷新；代码拼出来的文案由 <see cref="LanguageRefresh" />
+    ///         通知所有 ViewModel 重算（本类见 <see cref="OnLanguageChanged" />）。
+    ///     </para>
+    /// </summary>
+    public void ApplyLanguagePreference(string? language) {
+        _settingsStore.Language = language;
+        _settingsStore.Save();
+        TranslationCatalog.Instance.SetLanguage(language ?? UiLanguage.SystemLanguage());
+    }
+
+    /// <inheritdoc />
+    protected override void OnLanguageChanged() => RefreshLocalizedOptions();
 
     /// <summary>立即把按 IMG 记忆的设置写盘（关窗口时调用，避免防抖定时器还没触发就退出）。</summary>
     public void FlushSettings() {
@@ -477,13 +627,13 @@ public sealed class MainWindowViewModel : ViewModelBase {
         internal set => SetProperty(ref _mousePositionText, value);
     }
 
-    /// <summary>画布标尺是否显示（快捷键 Ctrl+R；默认显示）。</summary>
+    /// <summary>画布标尺是否显示（快捷键 ⌘R，Windows 为 Ctrl+R；默认显示）。</summary>
     public bool IsRulersVisible {
         get => _isRulersVisible;
         set => SetProperty(ref _isRulersVisible, value);
     }
 
-    /// <summary>画布参考线是否显示（快捷键 Ctrl+;；隐藏时数据保留）。</summary>
+    /// <summary>画布参考线是否显示（快捷键 ⌘;，Windows 为 Ctrl+;；隐藏时数据保留）。</summary>
     public bool IsGuidesVisible {
         get => _isGuidesVisible;
         set => SetProperty(ref _isGuidesVisible, value);
@@ -605,5 +755,13 @@ public sealed class MainWindowViewModel : ViewModelBase {
         if (name == nameof(FileName)) {
             OnPropertyChanged(nameof(WindowTitle));
         }
+
+        // 换了条目就停掉上一段试听：否则听到的不是当前选中的音效
+        if (name == nameof(SelectedEntry) && _audio.IsPlaying) {
+            StopAudio();
+        }
     }
+
+    /// <summary>窗口关闭时停掉试听进程、清掉临时文件。</summary>
+    public void ShutdownAudio() => _audio.Dispose();
 }

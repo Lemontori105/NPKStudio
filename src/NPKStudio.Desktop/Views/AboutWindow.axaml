@@ -1,0 +1,30 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:NPKStudio.Desktop.Localization"
+        x:Class="NPKStudio.Desktop.Views.AboutWindow"
+        Width="380"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{loc:Tr about.title}"
+        Background="{DynamicResource SurfacePanel}"
+        FontFamily="Inter, Microsoft YaHei UI, PingFang SC"
+        FontSize="13">
+
+  <!-- 「关于 NPKStudio」：代替 Avalonia 默认的 About Avalonia（macOS 应用菜单） -->
+  <StackPanel Margin="24,22" Spacing="8" HorizontalAlignment="Center">
+    <TextBlock Text="NPKStudio" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center"
+               Foreground="{DynamicResource TextPrimary}" />
+    <TextBlock x:Name="VersionText" HorizontalAlignment="Center" FontSize="12"
+               Foreground="{DynamicResource TextSecondary}" />
+    <TextBlock Text="{loc:Tr about.desc}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"
+               Foreground="{DynamicResource TextPrimary}" Margin="0,6,0,0" />
+    <TextBlock Text="{loc:Tr about.license}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="320"
+               FontSize="12" Foreground="{DynamicResource TextSecondary}" />
+    <Button HorizontalAlignment="Center" Background="Transparent" BorderThickness="0" Padding="0" Cursor="Hand"
+            Foreground="{DynamicResource AccentPrimary}" Click="OnOpenRepository" Margin="0,4,0,0">
+      <TextBlock Text="{loc:Tr about.repository}" TextDecorations="Underline" FontSize="12" />
+    </Button>
+  </StackPanel>
+</Window>

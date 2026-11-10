@@ -72,6 +72,7 @@ internal sealed class ChannelDocument
     /// <summary>打开文件或文件夹：目录走 <see cref="FolderEntrySource" />，其余按 NPK / IMG 处理。</summary>
     public async Task OpenAsync(string path) {
         _owner.Stop();
+        _owner.MarkAudioSaved();   // 换文件：旧包里没保存的音效替换随旧包丢弃（和帧编辑一样，上游打开新文件时不提示保存）
         _owner.IsBusy = true;
         _owner.Status = Loc["status.parsingIndex"];
         try {
@@ -227,6 +228,8 @@ internal sealed class ChannelDocument
             if (r.Success) {
                 _owner.Editor.MarkSaved();
                 _owner.Editor.RefreshChangeMarkers();
+                _owner.MarkAudioSaved();
+                _owner.NotifyAudio();
             }
         } finally {
             _owner.IsBusy = false;
@@ -269,6 +272,8 @@ internal sealed class ChannelDocument
             if (r.Success) {
                 _owner.Editor.MarkSaved();
                 _owner.Editor.RefreshChangeMarkers();
+                _owner.MarkAudioSaved();
+                _owner.NotifyAudio();
             }
         } finally {
             _owner.IsBusy = false;
@@ -328,5 +333,6 @@ internal sealed class ChannelDocument
         _owner.Notify(nameof(FrameChannel.CanEditFrames));
         _owner.Notify(nameof(FrameChannel.CanTrim));
         _owner.Notify(nameof(FrameChannel.FrameAreaEmptyText));
+        _owner.NotifyAudio();
     }
 }

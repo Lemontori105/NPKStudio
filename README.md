@@ -14,7 +14,7 @@ A viewer and editor for DNF `.NPK` / `.img` game resources, rewritten with [Aval
 - **播放**：9 档倍率（0.25×–4×，1× = 8 fps）、循环、空格键播放/暂停、方向键逐帧；
   解码结果按帧缓存（预算 64MB），循环播放从第二圈起不再解码
 - **帧编辑**：替换素材（PNG/BMP/JPG）、插入、删除、上移/下移、改坐标与宽高、拖拽排序
-- **撤销 / 重做**：Ctrl+Z / Ctrl+Y，栈深 50，变更标记告诉你动过哪几帧
+- **撤销 / 重做**：Ctrl+Z / Ctrl+Y（macOS 为 ⌘Z / ⇧⌘Z），栈深 50，变更标记告诉你动过哪几帧
 - **隐藏帧**：H 键临时隐藏，只影响预览与播放，不改文件
 - **精确对位**：标尺、参考线、十字辅助线、像素对齐（缩放吸附整数档 + 最近邻绘制）、图像/角色双坐标基准
 - **背景 7 档**：透明格 / 亮格 / 暗格 / 纯黑 / 深灰 / 浅灰 / 绿幕
@@ -22,7 +22,9 @@ A viewer and editor for DNF `.NPK` / `.img` game resources, rewritten with [Aval
 - **导出**：当前帧 PNG、批量 PNG、整段动画 GIF
 - **写回**：另存 NPK（未改动的条目逐字节保持不变）
 - **打包**：文件夹 + 资源清单 → NPK，可与客户端已有 NPK 合并
-- **多语言**：中文 / English，运行时切换，新增语言只需加一份 JSON
+- **音效**：NPK 里的 `.ogg` 条目可试听、导出、替换（替换时按需转成 Ogg Vorbis）；
+  用到的 `ffmpeg` / `ffplay` / `oggenc` 在「设置 → 外部工具」里一键检测，macOS 有 Homebrew 时可直接安装 / 升级
+- **多语言**：中文 / English，在「设置」里切换（默认跟随系统），运行时立即生效，新增语言只需加一份 JSON
 - **单文件发布**：`NPKStudio.exe` 双击即用，目标机器无需安装 .NET
 
 ![标尺与参考线](docs/images/rulers-guides.png)
@@ -70,6 +72,16 @@ python tools/pack.py
 
 版本号只有一个来源：`src/NPKStudio.Desktop/NPKStudio.Desktop.csproj` 的 `<Version>`。
 界面标题、exe 文件属性、zip 文件名都读它，任何地方都不要另写版本号。
+
+### macOS
+
+目前 Release 只有 Windows 版；Mac（Apple Silicon / Intel）按上面"从源码构建"即可运行。Mac 上的差异：
+
+- **快捷键用 ⌘**：⌘O 打开、⌘S 另存、⌘E 导出 PNG、⌘Z / ⇧⌘Z 撤销 / 重做、⌫ 删除帧、⌘, 设置、⌘W 关闭窗口、⌘Q 退出；
+  界面提示里的快捷键按 Mac 写法显示。Control 组合键不触发命令，和系统其它程序一致
+- **触控板**：双指捏合缩放、双指拖动平移、双指轻点两下智能缩放（适配窗口 ↔ 放大），⌘ + 滚轮缩放
+- **应用菜单**：菜单栏的「NPKStudio」菜单里是 关于 / 设置… / 服务 / 隐藏 / 退出，文字跟随界面语言；
+  设置入口在这里（苹果的习惯），工具栏的设置按钮只在 Windows / Linux 显示
 
 ## 命令行用法
 

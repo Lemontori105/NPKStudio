@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using NPKStudio.Desktop.Input;
 
 namespace NPKStudio.Desktop.Localization;
 
@@ -27,6 +28,9 @@ internal sealed partial class LocalizationJsonContext : JsonSerializerContext { 
 /// </summary>
 public sealed class TranslationCatalog : INotifyPropertyChanged {
     private const string Fallback = "zh-CN";
+
+    /// <summary>C# 索引器 <c>this[string]</c> 在反射里的属性名。</summary>
+    internal const string IndexerPropertyName = "Item";
 
     private static readonly Lazy<TranslationCatalog> LazyInstance = new(() => new TranslationCatalog());
 
@@ -63,8 +67,11 @@ public sealed class TranslationCatalog : INotifyPropertyChanged {
         if (string.IsNullOrWhiteSpace(language) || !Load(language)) return false;
 
         CurrentLanguage = language;
-        // 索引器绑定的变更通知：Avalonia 用 "Item[]" 表示"所有索引器值都变了"
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+        // 索引器绑定的变更通知要用索引器的属性名 "Item"，不是 WPF 习惯的 "Item[]"：
+        // Avalonia 11.3 的 {loc:Tr} 走反射绑定 ReflectionIndexerNode，它的 ShouldUpdate 拿通知里的名字
+        // GetDeclaredProperty(name)，是带索引参数的属性才刷新（反编译查 Avalonia.Base 11.3.22）。
+        // 用 "Item[]" 时找不到属性，XAML 里所有 {loc:Tr} 文字切换语言后都不会变。
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerPropertyName));
         return true;
     }
 
@@ -91,7 +98,12 @@ public sealed class TranslationCatalog : INotifyPropertyChanged {
             LocalizationJsonContext.Default.DictionaryStringString);
         if (parsed is null || parsed.Count == 0) return false;
 
-        _strings = new Dictionary<string, string>(parsed, StringComparer.OrdinalIgnoreCase);
+        // 词表里的快捷键按 Windows 写（Ctrl+O）；macOS 上统一换成 Mac 写法（⌘O、⇧⌘Z、⌫），见 PlatformShortcuts.Localize
+        _strings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (key, value) in parsed) {
+            _strings[key] = PlatformShortcuts.Localize(value);
+        }
+
         return true;
     }
 }

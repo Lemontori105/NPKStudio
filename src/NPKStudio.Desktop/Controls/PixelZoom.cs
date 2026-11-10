@@ -52,7 +52,7 @@ internal sealed class PixelZoom {
     }
 
     /// <summary>
-    ///     从当前档位往指定方向走一档（Ctrl+滚轮）。
+    ///     从当前档位往指定方向走一档（⌘+滚轮；Windows 为 Ctrl+滚轮）。
     ///     <para>若当前值不在档位上（例如刚关闭开关后留下的 3.7），向上取第一个更大的档、向下取第一个更小的档。</para>
     /// </summary>
     public double Next(double current, int direction) {

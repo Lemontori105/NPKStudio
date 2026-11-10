@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using NPKStudio.Core.Diagnostics;
 using NPKStudio.Core.Formats;
 using NPKStudio.Core.Imaging;
+using NPKStudio.Desktop.Input;
 using NPKStudio.Desktop.Localization;
 using NPKStudio.Desktop.Services;
 using NPKStudio.Desktop.ViewModels;
@@ -104,20 +105,13 @@ public sealed partial class MainWindow : Window {
         FrameList.AddHandler(InputElement.PointerReleasedEvent, OnFrameListPointerReleased, RoutingStrategies.Tunnel);
         FrameList.AddHandler(InputElement.PointerCaptureLostEvent, OnFrameListCaptureLost, RoutingStrategies.Tunnel);
 
-        FrameCanvas.ZoomChanged += (_, _) => {
-            // 与画布右下角气泡同一个格式（"0"：四舍五入），两处不能各算各的
-            var zoom = Loc.F("status.zoom", (FrameCanvas.Zoom * 100).ToString("0"));
-            ZoomLabel.Text = zoom;
-            _viewModel.ZoomText = zoom;
-        };
+        FrameCanvas.ZoomChanged += (_, _) => UpdateZoomText();
 
         // 鼠标坐标：控件只在整数坐标变化 / 指针离开时发通知，状态栏不会每 Move 都刷一次。
-        // 读数按当前"坐标基准"换算（Image = 画布左上角为 0,0），与标尺、参考线标签保持一致。
-        FrameCanvas.PointerPositionChanged += (_, _) => {
-            _viewModel.MousePositionText = FrameCanvas.PointerDisplayPosition is { } pointer
-                ? Loc.F("status.pointer", (int)Math.Round(pointer.X), (int)Math.Round(pointer.Y))
-                : string.Empty;
-        };
+        FrameCanvas.PointerPositionChanged += (_, _) => UpdatePointerText();
+
+        // 运行时切换语言：这两处文字是代码直接写进控件 / VM 的，不走绑定，要自己重算一次
+        Loc.PropertyChanged += OnLanguageChanged;
 
         // 参考线数量的唯一真相源是画布：新增 / 拖出 / 拖回删除 / 清除都要推给 VM，
         // 右键菜单「清除参考线」才能在没有线时正确置灰。
@@ -217,7 +211,7 @@ public sealed partial class MainWindow : Window {
         e.Handled = true;
     }
 
-    /// <summary>松手：按指示线的位置把这一帧搬过去（复用 MoveFrame 语义，Ctrl+Z 可还原）。</summary>
+    /// <summary>松手：按指示线的位置把这一帧搬过去（复用 MoveFrame 语义，⌘Z 可还原，Windows 为 Ctrl+Z）。</summary>
     private void OnFrameListPointerReleased(object? sender, PointerReleasedEventArgs e) {
         if (!_isFrameDragging) {
             ResetFrameDrag();
@@ -1132,6 +1126,32 @@ public sealed partial class MainWindow : Window {
         base.OnClosing(e);
     }
 
+    /// <summary>窗口真正关掉后停掉试听进程（ffplay）并清理临时文件。</summary>
+    protected override void OnClosed(EventArgs e) {
+        Loc.PropertyChanged -= OnLanguageChanged;
+        _viewModel.ShutdownAudio();
+        base.OnClosed(e);
+    }
+
+    /// <summary>状态栏与画布右下角气泡的缩放文字（同一个格式，"0"：四舍五入，两处不能各算各的）。</summary>
+    private void UpdateZoomText() {
+        var zoom = Loc.F("status.zoom", (FrameCanvas.Zoom * 100).ToString("0"));
+        ZoomLabel.Text = zoom;
+        _viewModel.ZoomText = zoom;
+    }
+
+    /// <summary>状态栏鼠标坐标：按当前"坐标基准"换算（Image = 画布左上角为 0,0），与标尺、参考线标签一致。</summary>
+    private void UpdatePointerText() {
+        _viewModel.MousePositionText = FrameCanvas.PointerDisplayPosition is { } pointer
+            ? Loc.F("status.pointer", (int)Math.Round(pointer.X), (int)Math.Round(pointer.Y))
+            : string.Empty;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        UpdateZoomText();
+        UpdatePointerText();
+    }
+
     /// <summary>
     ///     是否需要弹「保存 / 不保存 / 取消」。
     ///     <para>
@@ -1212,44 +1232,51 @@ public sealed partial class MainWindow : Window {
             return;
         }
 
+        // 主修饰键见 PlatformShortcuts：macOS 只认 ⌘，其他平台认 Ctrl；修饰键精确匹配。
+        // 下面注释里的 ⌘ 在 Windows / Linux 上就是 Ctrl。
+        var mods = e.KeyModifiers;
         switch (e.Key) {
-            case Key.R when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                // Ctrl+R：显示 / 隐藏标尺（Photoshop 习惯）
+            case Key.R when PlatformShortcuts.Is(mods):
+                // ⌘R：显示 / 隐藏标尺（Photoshop 习惯）
                 _viewModel.IsRulersVisible = !_viewModel.IsRulersVisible;
                 e.Handled = true;
                 return;
-            case Key.OemSemicolon when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                // Ctrl+;：显示 / 隐藏参考线（数据保留）
+            case Key.OemSemicolon when PlatformShortcuts.Is(mods):
+                // ⌘;：显示 / 隐藏参考线（数据保留）
                 _viewModel.IsGuidesVisible = !_viewModel.IsGuidesVisible;
                 e.Handled = true;
                 return;
-            case Key.H when e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
-                           e.KeyModifiers.HasFlag(KeyModifiers.Shift):
-                // Ctrl+Shift+H：在视图中心加一条水平参考线（与右键菜单同一入口）
+            case Key.H when PlatformShortcuts.Is(mods, shift: true):
+                // ⇧⌘H：在视图中心加一条水平参考线（与右键菜单同一入口）
                 FrameCanvas.AddHorizontalGuideAtViewCenter();
                 e.Handled = true;
                 return;
-            case Key.H when e.KeyModifiers == KeyModifiers.None:
+            case Key.H when mods == KeyModifiers.None:
                 // H：切换选中帧的可见性（调试用，纯视图状态，不改文件、不置脏）
                 _viewModel.ToggleSelectedFramesVisibility();
                 e.Handled = true;
                 return;
-            case Key.V when e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
-                           e.KeyModifiers.HasFlag(KeyModifiers.Shift):
-                // Ctrl+Shift+V：在视图中心加一条垂直参考线
+            case Key.V when PlatformShortcuts.Is(mods, shift: true):
+                // ⇧⌘V：在视图中心加一条垂直参考线
                 FrameCanvas.AddVerticalGuideAtViewCenter();
                 e.Handled = true;
                 return;
-            case Key.D1 when e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+            case Key.D1 when PlatformShortcuts.Is(mods, shift: true):
                 ToggleLeftPanel();
                 e.Handled = true;
                 return;
-            case Key.D2 when e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+            case Key.D2 when PlatformShortcuts.Is(mods, shift: true):
                 ToggleRightPanel();
                 e.Handled = true;
                 return;
             case Key.Space:
-                _viewModel.TogglePlay();
+                // 音效条目：空格试听 / 停止（和"访达"里按空格预览一样）；其余照旧播放帧动画
+                if (_viewModel.IsAudioEntry) {
+                    _viewModel.ToggleAudio();
+                } else {
+                    _viewModel.TogglePlay();
+                }
+
                 e.Handled = true;
                 return;
             case Key.Left:
@@ -1260,31 +1287,46 @@ public sealed partial class MainWindow : Window {
                 _viewModel.StepFrame(1);
                 e.Handled = true;
                 return;
-            case Key.Delete:
-                // 焦点在输入框时上面已经放行（搜索框 / 数字输入框里的 Delete 是编辑文字）
+            case var key when PlatformShortcuts.IsDeleteKey(key):
+                // Delete（Mac 上是 delete 键 / fn+delete）。焦点在输入框时上面已经放行（输入框里是编辑文字）
                 _viewModel.DeleteSelectedFrames();
                 e.Handled = true;
                 return;
-            case Key.Z when e.KeyModifiers.HasFlag(KeyModifiers.Control):
-                // Ctrl+Z 撤销、Ctrl+Shift+Z 重做（与 Ctrl+Y 等价）
-                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift)) {
-                    _viewModel.RedoEdit();
-                } else {
-                    _viewModel.UndoEdit();
-                }
-
+            case Key.Z when PlatformShortcuts.Is(mods):
+                // ⌘Z 撤销
+                _viewModel.UndoEdit();
                 e.Handled = true;
                 return;
-            case Key.Y when e.KeyModifiers.HasFlag(KeyModifiers.Control):
+            case Key.Z when PlatformShortcuts.Is(mods, shift: true):
+                // ⇧⌘Z 重做
                 _viewModel.RedoEdit();
                 e.Handled = true;
                 return;
-        }
-
-        if (e.Key == Key.O && e.KeyModifiers.HasFlag(KeyModifiers.Control)) {
-            _ = PickFileAsync();
-            e.Handled = true;
-            return;
+            case Key.Y when PlatformShortcuts.AllowsRedoWithY && PlatformShortcuts.Is(mods):
+                // Ctrl+Y 重做：只在非 Mac 平台保留（Windows 习惯）
+                _viewModel.RedoEdit();
+                e.Handled = true;
+                return;
+            case Key.O when PlatformShortcuts.Is(mods):
+                // ⌘O 打开
+                _ = PickFileAsync();
+                e.Handled = true;
+                return;
+            case Key.S when PlatformShortcuts.Is(mods):
+                // ⌘S 保存：与工具栏"另存为 NPK / 写回 .img"同一入口（不可保存时入口自己会返回）
+                OnSaveAs(this, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            case Key.E when PlatformShortcuts.Is(mods):
+                // ⌘E 导出 PNG：与工具栏按钮同一入口（没有帧时入口自己会返回）
+                OnExportPng(this, new RoutedEventArgs());
+                e.Handled = true;
+                return;
+            case Key.OemComma when PlatformShortcuts.Is(mods):
+                // ⌘, 设置（macOS 应用菜单也带这个快捷键；重复触发时 OpenSettings 只会把已开的窗口提前）
+                OpenSettings();
+                e.Handled = true;
+                return;
         }
 
         base.OnKeyDown(e);
@@ -1355,6 +1397,31 @@ public sealed partial class MainWindow : Window {
         ApplyTitleBarTheme();
     }
 
+    // ── 设置 / 关于 ───────────────────────────────────────────────────────────
+
+    private SettingsWindow? _settingsWindow;
+
+    /// <summary>
+    ///     打开设置窗口（macOS 应用菜单「设置… ⌘,」、工具栏按钮、⌘, / Ctrl+, 都走这里）。
+    ///     <para>已经开着就提到前面，不开第二个（菜单快捷键和窗口按键可能同时触发）。</para>
+    /// </summary>
+    internal void OpenSettings() {
+        if (_settingsWindow is { } open) {
+            open.Activate();
+            return;
+        }
+
+        var window = new SettingsWindow(new SettingsViewModel(_viewModel.SavedLanguage, _viewModel.ApplyLanguagePreference));
+        window.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow = window;
+        window.Show(this);
+    }
+
+    /// <summary>打开「关于 NPKStudio」。</summary>
+    internal void OpenAbout() => _ = new AboutWindow().ShowDialog(this);
+
+    private void OnOpenSettings(object? sender, RoutedEventArgs e) => OpenSettings();
+
     private async void OnOpenFile(object? sender, RoutedEventArgs e) => await PickFileAsync();
 
     /// <summary>
@@ -1402,7 +1469,7 @@ public sealed partial class MainWindow : Window {
 
     private void OnToggleRightPanel(object? sender, RoutedEventArgs e) => ToggleRightPanel();
 
-    /// <summary>左栏折叠 / 展开（按钮与 Ctrl+Shift+1 共用）。</summary>
+    /// <summary>左栏折叠 / 展开（按钮与 ⇧⌘1 共用，Windows 为 Ctrl+Shift+1）。</summary>
     private void ToggleLeftPanel() {
         var column = ContentGrid.ColumnDefinitions[0];
         if (_viewModel.IsLeftCollapsed) {
@@ -1417,7 +1484,7 @@ public sealed partial class MainWindow : Window {
         _viewModel.IsLeftCollapsed = true;
     }
 
-    /// <summary>右栏折叠 / 展开（按钮与 Ctrl+Shift+2 共用）。</summary>
+    /// <summary>右栏折叠 / 展开（按钮与 ⇧⌘2 共用，Windows 为 Ctrl+Shift+2）。</summary>
     private void ToggleRightPanel() {
         var column = ContentGrid.ColumnDefinitions[4];
         if (_viewModel.IsRightCollapsed) {
@@ -1490,11 +1557,11 @@ public sealed partial class MainWindow : Window {
     /// <summary>右键帧列表：全部显示（没有隐藏帧时菜单项置灰）。</summary>
     private void OnShowAllFrames(object? sender, RoutedEventArgs e) => _viewModel.ShowAllFrames();
 
-    /// <summary>右键菜单 / Ctrl+Shift+H：在视图中心加一条水平参考线。</summary>
+    /// <summary>右键菜单 / ⇧⌘H（Windows 为 Ctrl+Shift+H）：在视图中心加一条水平参考线。</summary>
     private void OnAddHorizontalGuide(object? sender, RoutedEventArgs e) =>
         FrameCanvas.AddHorizontalGuideAtViewCenter();
 
-    /// <summary>右键菜单 / Ctrl+Shift+V：在视图中心加一条垂直参考线。</summary>
+    /// <summary>右键菜单 / ⇧⌘V（Windows 为 Ctrl+Shift+V）：在视图中心加一条垂直参考线。</summary>
     private void OnAddVerticalGuide(object? sender, RoutedEventArgs e) =>
         FrameCanvas.AddVerticalGuideAtViewCenter();
 
@@ -1663,6 +1730,63 @@ public sealed partial class MainWindow : Window {
         var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
         if (!string.IsNullOrEmpty(path)) {
             await _viewModel.ReplaceSelectedFrameAsync(path);
+        }
+    }
+
+    // ── 音效条目 ───────────────────────────────────────────────────────────────
+
+    private void OnToggleAudio(object? sender, RoutedEventArgs e) => _viewModel.ToggleAudio();
+
+    /// <summary>把当前音效另存为一个 .ogg 文件（原样字节；替换过还没保存的就是替换后的内容）。</summary>
+    private async void OnExportAudio(object? sender, RoutedEventArgs e) {
+        if (!_viewModel.IsAudioEntry) return;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions {
+            Title = Loc["dialog.exportAudio.title"],
+            DefaultExtension = "ogg",
+            SuggestedFileName = Path.GetFileNameWithoutExtension(_viewModel.SelectedEntry?.Name ?? "sound"),
+            FileTypeChoices = [new FilePickerFileType(Loc["dialog.audio.filterOgg"]) { Patterns = ["*.ogg"] }]
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (!string.IsNullOrEmpty(path)) {
+            await _viewModel.ExportCurrentAudioToFileAsync(path);
+        }
+    }
+
+    /// <summary>把包里所有音效按包内路径导出到一个文件夹（社区整包语音拆包用）。</summary>
+    private async void OnExportAllAudio(object? sender, RoutedEventArgs e) {
+        if (!_viewModel.HasArchive) return;
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions {
+            Title = Loc["dialog.exportAudioAll.title"],
+            AllowMultiple = false
+        });
+
+        var directory = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+        if (!string.IsNullOrEmpty(directory)) {
+            await _viewModel.ExportAudioAsync(directory, currentOnly: false);
+        }
+    }
+
+    /// <summary>选一个音频文件替换当前音效（按原采样率 / 声道转成 Ogg Vorbis；保存后写进 NPK）。</summary>
+    private async void OnReplaceAudio(object? sender, RoutedEventArgs e) {
+        if (!_viewModel.CanReplaceAudio) return;
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions {
+            Title = Loc["dialog.replaceAudio.title"],
+            AllowMultiple = false,
+            FileTypeFilter = [
+                new FilePickerFileType(Loc["dialog.audio.filterAudio"]) {
+                    Patterns = ["*.ogg", "*.wav", "*.mp3", "*.flac", "*.m4a", "*.aac", "*.aif", "*.aiff", "*.opus"]
+                },
+                FilePickerFileTypes.All
+            ]
+        });
+
+        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        if (!string.IsNullOrEmpty(path)) {
+            await _viewModel.ReplaceCurrentAudioAsync(path);
         }
     }
 

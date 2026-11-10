@@ -1,0 +1,118 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:NPKStudio.Desktop.Localization"
+        xmlns:vm="using:NPKStudio.Desktop.ViewModels"
+        x:Class="NPKStudio.Desktop.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Width="660" Height="600" MinWidth="560" MinHeight="460"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Title="{loc:Tr settings.title}"
+        Background="{DynamicResource SurfacePanel}"
+        FontFamily="Inter, Microsoft YaHei UI, PingFang SC"
+        FontSize="13">
+
+  <!-- 设置窗口：macOS 从应用菜单「设置… ⌘,」打开，Windows / Linux 从工具栏齿轮打开。
+       只用 Avalonia 自带控件，样式沿用主窗口的 token，浅深色主题自动跟随。 -->
+  <Window.Styles>
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Foreground" Value="{DynamicResource AccentPrimary}" />
+    </Style>
+    <Style Selector="Button.link:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+    </Style>
+    <Style Selector="TextBlock.hint">
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+  </Window.Styles>
+
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="20,16,20,20">
+    <!-- 通用：界面语言 -->
+    <TextBlock Grid.Row="0" Classes="section" Text="{loc:Tr settings.section.general}" />
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="0,10,0,20">
+      <TextBlock Text="{loc:Tr settings.language}" VerticalAlignment="Center"
+                 Foreground="{DynamicResource TextPrimary}" />
+      <ComboBox x:Name="LanguageBox" Grid.Column="1" Margin="12,0,0,0" MinWidth="220"
+                HorizontalAlignment="Left"
+                ItemsSource="{Binding LanguageOptions}"
+                SelectedIndex="{Binding LanguageIndex, Mode=TwoWay}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:LanguageOption">
+            <TextBlock Text="{Binding Label}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+    </Grid>
+
+    <!-- 外部工具：一个按钮检测全部，每个依赖一个下载 / 安装按钮 -->
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+      <StackPanel Spacing="4">
+        <TextBlock Classes="section" Text="{loc:Tr settings.section.tools}" />
+        <TextBlock Classes="hint" Text="{loc:Tr settings.tools.desc}" />
+        <TextBlock x:Name="EnvironmentLine" Classes="hint" Text="{Binding EnvironmentText}" />
+        <Button Classes="link" IsVisible="{Binding ShowHomebrewLink}" Click="OnOpenHomebrew">
+          <TextBlock Text="{loc:Tr settings.env.brewLink}" TextDecorations="Underline" FontSize="12" />
+        </Button>
+      </StackPanel>
+      <Button x:Name="CheckAllButton" Grid.Column="1" Classes="primary" MinWidth="110" Height="32"
+              VerticalAlignment="Top" Margin="12,0,0,0"
+              IsEnabled="{Binding !IsChecking}" Click="OnCheckAll"
+              Content="{loc:Tr settings.tools.check}" />
+    </Grid>
+
+    <ItemsControl x:Name="ToolList" Grid.Row="3" Margin="0,8,0,12" ItemsSource="{Binding Items}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="vm:ToolItemViewModel">
+          <Border Margin="0,8,0,0" Padding="14,12" CornerRadius="6"
+                  Background="{DynamicResource SurfaceRaised}"
+                  BorderBrush="{DynamicResource BorderDefault}" BorderThickness="1">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="3">
+                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Classes="hint" Text="{Binding Purpose}" />
+                <StackPanel Orientation="Horizontal" Spacing="18" Margin="0,4,0,0">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="hint" Text="{loc:Tr settings.tool.installedLabel}" />
+                    <TextBlock FontSize="12" Text="{Binding InstalledText}" Foreground="{DynamicResource TextPrimary}" />
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Classes="hint" Text="{loc:Tr settings.tool.latestLabel}" />
+                    <TextBlock FontSize="12" Text="{Binding LatestText}" Foreground="{DynamicResource TextPrimary}" />
+                  </StackPanel>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Classes="hint" Text="{Binding StatusText}" />
+                  <Button Classes="link toolLink" IsVisible="{Binding ShowLink}">
+                    <TextBlock Text="{Binding LinkText}" TextDecorations="Underline" FontSize="12" />
+                  </Button>
+                </StackPanel>
+              </StackPanel>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6" Margin="12,0,0,0">
+                <Button Classes="toolWide toolAction" MinWidth="130"
+                        IsEnabled="{Binding CanAct}" Content="{Binding ActionText}" />
+                <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" MinWidth="130" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- 安装输出 -->
+    <TextBox x:Name="LogBox" Grid.Row="4"
+             Text="{Binding LogText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+             FontFamily="Menlo, Consolas, monospace" FontSize="11"
+             Watermark="{loc:Tr settings.log.empty}" />
+  </Grid>
+</Window>

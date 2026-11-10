@@ -91,6 +91,30 @@ public sealed class ImgFile
     internal byte[] RawPayload { get; set; } = [];
 
     /// <summary>
+    ///     非 IMG 条目（如 .ogg 音效）的完整原始内容（只读视图）；IMG 条目（含未实现版本）返回空。
+    /// </summary>
+    public ReadOnlyMemory<byte> RawContent => Version == ImgVersion.Other ? RawPayload : ReadOnlyMemory<byte>.Empty;
+
+    /// <summary>
+    ///     整段替换非 IMG 条目（如 .ogg 音效）的内容，并把所属 NPK 条目标记为已修改：保存时写入新字节，
+    ///     其余条目照旧按原始字节直拷。
+    /// </summary>
+    /// <param name="content">新内容（原样写入，不做任何转换）。</param>
+    /// <exception cref="NotSupportedException">当前条目是 IMG（包括未实现的版本），不能整段替换。</exception>
+    public void ReplaceRawContent(byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        if (Version != ImgVersion.Other)
+        {
+            throw new NotSupportedException($"只有非 IMG 条目（如 .ogg）可以整段替换，当前是 {Version}。");
+        }
+
+        RawPayload = content;
+        IndexLength = content.Length;
+        MarkModified();
+    }
+
+    /// <summary>
     ///     新建一个空 IMG（供"新建/导入"流程使用）。
     /// </summary>
     /// <param name="version">目标版本，必须是已注册的版本。</param>

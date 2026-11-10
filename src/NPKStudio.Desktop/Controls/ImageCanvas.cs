@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using NPKStudio.Core.Imaging;
 using NPKStudio.Desktop.Controls.Rendering;
+using NPKStudio.Desktop.Input;
 
 namespace NPKStudio.Desktop.Controls;
 
@@ -87,6 +88,7 @@ public sealed class ImageCanvas : Control {
 
     private readonly ViewportTransform _transform = new();
     private readonly PixelZoom _pixelZoom = new();
+    private readonly ZoomInput _zoomInput = new();
     private readonly GuideStore _guides = new();
     private readonly CanvasBackgroundRenderer _backgroundRenderer = new();
     private readonly FrameRenderer _frameRenderer = new();
@@ -124,6 +126,9 @@ public sealed class ImageCanvas : Control {
             CrosshairBrushProperty, GuideBrushProperty,
             ShowGuideLabelsProperty, GuideLabelBackgroundProperty, GuideLabelTextBrushProperty,
             IsPixelAlignEnabledProperty);
+
+        // macOS 触控板双指捏合（Avalonia.Native 把 magnifyWithEvent: 转成这个路由事件）
+        Gestures.AddPointerTouchPadGestureMagnifyHandler(this, OnTouchPadMagnify);
     }
 
     // ==================== 依赖属性包装（公开 API，签名与行为不变） ====================
@@ -227,6 +232,8 @@ public sealed class ImageCanvas : Control {
         if (scale <= 0) return;
 
         var target = IsPixelAlignEnabled ? _pixelZoom.SnapDown(scale) : scale;
+        _zoomInput.ResetPinch();
+        _zoomInput.ResetPendingTicks();
         _transform.SetZoom(target, new Point(viewport.Width / 2, viewport.Height / 2));
         _transform.Center(extent, viewport);
         InvalidateVisual();
@@ -237,6 +244,8 @@ public sealed class ImageCanvas : Control {
     public void ResetZoom() {
         var extent = CanvasExtent;
         if (extent.Width <= 0 || extent.Height <= 0) return;
+        _zoomInput.ResetPinch();
+        _zoomInput.ResetPendingTicks();
         _transform.Reset(extent, Bounds.Size);
         InvalidateVisual();
         ZoomChanged?.Invoke(this, EventArgs.Empty);
@@ -271,10 +280,10 @@ public sealed class ImageCanvas : Control {
         NotifyGuidesChanged();
     }
 
-    /// <summary>在<b>当前视图可见区域</b>的正中加一条水平参考线（右键菜单 / Ctrl+Shift+H）。</summary>
+    /// <summary>在<b>当前视图可见区域</b>的正中加一条水平参考线（右键菜单 / ⇧⌘H，Windows 为 Ctrl+Shift+H）。</summary>
     public void AddHorizontalGuideAtViewCenter() => AddHorizontalGuide(ViewCenterFramePosition.Y);
 
-    /// <summary>在<b>当前视图可见区域</b>的正中加一条垂直参考线（右键菜单 / Ctrl+Shift+V）。</summary>
+    /// <summary>在<b>当前视图可见区域</b>的正中加一条垂直参考线（右键菜单 / ⇧⌘V，Windows 为 Ctrl+Shift+V）。</summary>
     public void AddVerticalGuideAtViewCenter() => AddVerticalGuide(ViewCenterFramePosition.X);
 
     /// <summary>视图可见区域中心对应的角色坐标（不含标尺边带；视口尚未布局时退回控件中心）。</summary>
@@ -387,6 +396,8 @@ public sealed class ImageCanvas : Control {
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e) {
         base.OnAttachedToVisualTree(e);
         _frameRenderer.Reattach(Image);
+        // 到这里 Avalonia 平台已初始化，原生 AvnView 类已加载，可以补上 macOS 智能缩放（只做一次）
+        MacSmartZoom.EnsureInstalled(OnMacSmartZoom);
         InvalidateVisual();
     }
 
@@ -517,20 +528,108 @@ public sealed class ImageCanvas : Control {
         base.OnPointerWheelChanged(e);
         if (Image is null) return;
 
-        if ((e.KeyModifiers & KeyModifiers.Control) != 0) {
+        // 主修饰键 + 滚轮缩放：macOS 是 ⌘，其他平台是 Ctrl（见 PlatformShortcuts）。
+        // 缩放量按滚动量折算（一格 = 10%，见 ZoomInput）：触控板滑动是一串很小的 Delta，不能每个事件都算一整格。
+        if (PlatformShortcuts.HasCommand(e.KeyModifiers)) {
+            _zoomInput.ResetPinch();
+            var ticks = e.Delta.Y;
+            var anchor = e.GetPosition(this);
             if (IsPixelAlignEnabled) {
-                // 连续缩放下 4.0 × 1.1 仍会吸附回 4.0，滚轮会"卡死"：这里直接跳到上/下一档。
-                var next = _pixelZoom.Next(_transform.Zoom, e.Delta.Y > 0 ? 1 : -1);
-                _transform.SetZoom(next, e.GetPosition(this));
+                // 连续缩放下 4.0 × 1.1 仍会吸附回 4.0，滚轮会"卡死"：攒够一格直接跳到上/下一档。
+                var steps = _zoomInput.StepsForTicks(ticks);
+                if (steps != 0) {
+                    var next = _transform.Zoom;
+                    for (var i = 0; i < Math.Abs(steps); i++) {
+                        next = _pixelZoom.Next(next, Math.Sign(steps));
+                    }
+
+                    _transform.SetZoom(next, anchor);
+                }
             } else {
-                var factor = e.Delta.Y > 0 ? 1.1 : 1 / 1.1;
-                _transform.ZoomAt(e.GetPosition(this), factor);
+                _transform.ZoomAt(anchor, ZoomInput.FactorForTicks(ticks));
             }
 
             InvalidateVisual();
             ZoomChanged?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
+            return;
         }
+
+        // 不按修饰键（或只按 Shift）的滚动 = 平移：触控板双指拖动、鼠标滚轮上下 / Shift+滚轮左右
+        if ((e.KeyModifiers & ~KeyModifiers.Shift) == KeyModifiers.None) {
+            var pan = ZoomInput.PanDelta(e.Delta, e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            if (pan == default) return;
+
+            _transform.Pan(pan);
+            // 画面动了，指针下的图像坐标也变了：强制刷新一次状态栏坐标
+            var pointer = _pointerScreen ?? e.GetPosition(this);
+            _pointerScreen = null;
+            SetPointer(pointer);
+            InvalidateVisual();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    ///     macOS 智能缩放（双指轻点两下）：当前就是"适配窗口"时，以指针为中心放大到 2 倍（像素对齐时至少升一档）；
+    ///     否则回到适配窗口。和"预览""Safari"里放大 / 缩回的切换一致。
+    /// </summary>
+    internal void ToggleSmartZoom() {
+        var extent = CanvasExtent;
+        if (Image is null || extent.Width <= 0 || extent.Height <= 0 || Bounds.Width <= 0 || Bounds.Height <= 0) return;
+
+        var raw = _transform.ComputeFit(extent, Bounds.Size);
+        if (raw <= 0) return;
+
+        var fit = Math.Clamp(IsPixelAlignEnabled ? _pixelZoom.SnapDown(raw) : raw,
+            ViewportTransform.MinZoom, ViewportTransform.MaxZoom);
+        if (!ZoomInput.IsNearFit(_transform.Zoom, fit)) {
+            FitToView();
+            return;
+        }
+
+        var target = ZoomInput.SmartZoomTarget(fit);
+        if (IsPixelAlignEnabled) {
+            target = Math.Max(_pixelZoom.Snap(target), _pixelZoom.Next(fit, 1));
+        }
+
+        _zoomInput.ResetPinch();
+        _zoomInput.ResetPendingTicks();
+        _transform.SetZoom(target, _pointerScreen ?? new Point(Bounds.Width / 2, Bounds.Height / 2));
+        InvalidateVisual();
+        ZoomChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    // 指针当前停在哪个画布上（智能缩放事件不带目标控件，按指针位置分发）
+    private static WeakReference<ImageCanvas>? s_hoveredCanvas;
+
+    private static void OnMacSmartZoom() {
+        if (s_hoveredCanvas is not null && s_hoveredCanvas.TryGetTarget(out var canvas)) {
+            canvas.ToggleSmartZoom();
+        }
+    }
+
+    /// <summary>
+    ///     触控板双指捏合缩放（macOS）：不需要按修饰键，按捏合幅度连续缩放；像素对齐时吸附到最近档位。
+    ///     锚点是指针位置，和 ⌘+滚轮一致。
+    /// </summary>
+    private void OnTouchPadMagnify(object? sender, PointerDeltaEventArgs e) {
+        if (Image is null) return;
+
+        // macOS 后端把 magnification 同时放进 Delta.X / Delta.Y；优先取 X，X 为 0 时退回 Y
+        var magnification = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
+        if (magnification == 0) return;
+
+        _zoomInput.ResetPendingTicks();
+        var target = _zoomInput.PinchTarget(_transform.Zoom, magnification, Environment.TickCount64);
+        if (IsPixelAlignEnabled) {
+            target = _pixelZoom.Snap(target);
+        }
+
+        _transform.SetZoom(target, e.GetPosition(this));
+        InvalidateVisual();
+        ZoomChanged?.Invoke(this, EventArgs.Empty);
+        e.Handled = true;
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e) {
@@ -675,6 +774,7 @@ public sealed class ImageCanvas : Control {
     /// </summary>
     protected override void OnPointerEntered(PointerEventArgs e) {
         base.OnPointerEntered(e);
+        s_hoveredCanvas = new WeakReference<ImageCanvas>(this);
         var position = e.GetPosition(this);
         SetPointer(position);
         UpdateHover(position);
@@ -693,6 +793,9 @@ public sealed class ImageCanvas : Control {
         _guideInteraction.ResetHover();
         Cursor = _guideInteraction.Cursor;
         SetPointer(null);
+        if (s_hoveredCanvas is not null && s_hoveredCanvas.TryGetTarget(out var hovered) && ReferenceEquals(hovered, this)) {
+            s_hoveredCanvas = null;
+        }
     }
 
     private bool IsInRulerBand(Point position) => IsRulersVisible && (position.X < RulerSize || position.Y < RulerSize);
